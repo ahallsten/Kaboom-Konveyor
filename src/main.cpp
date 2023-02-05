@@ -1,15 +1,20 @@
+/*Libraries for Load Cell Amp*/
 #include "HX711.h"
-#include <AccelStepper.h>
-#include <Servo.h>
-#include <Adafruit_MotorShield.h>
 #include <SPI.h>
 #include <Wire.h>
+/*Libraries for Stepper Driver*/
+#include <AccelStepper.h>
+#include <Servo.h>
+/*Libraries for 3.5TFT*/
+#include <Adafruit_GFX.h>
+#include <MCUFRIEND_kbv.h>
+#include <TouchScreen.h>
 
-// PIN SELECTION
+
+/*PIN SELECTIONS AND DEFINITIONS*/
 // HX711 circuit wiring
 #define LOADCELL_SCK_PIN 2
 #define LOADCELL_DOUT_PIN 3
-
 // STEPPER circuit wiring
 // #define STOP 2
 // #define AXISSELECT 3
@@ -18,12 +23,16 @@
 #define SLEEP 5
 // #define RESET 40
 // #define FAULT 42
-
-// Units of scale
+// Units of Scale 
 #define UNITS_G 0
 #define UNITS_GN 1
 
-// VARIABLES
+// Screen Analog Values
+#define MINPRESSURE 200
+#define MAXPRESSURE 1000
+
+
+/*VARIABLES*/ 
 // STEPPER variables
 int motor_interface_type = 1; // Type 1 is a Driver with 2 pins, STEP and DIR
 long accel = 1200;
@@ -40,7 +49,6 @@ float maxspeed = 5000;
 float minPos = 0;
 float maxPos = 5000;
 long step = 0;
-
 // HX711 variables
 byte setting_sample_average = 10;
 bool tare_button_state;
@@ -58,22 +66,19 @@ int setting_tare_point;
 int setting_average_amount;
 byte setting_units; // Lbs or kg?
 int setting_calibration_factor = 1000;
-
+// TFT variables
+const int XP = 7, XM = A1, YP = A2, YM = 6; //320x480 ID=0x6814
+const int TS_LEFT = 176, TS_RT = 921, TS_TOP = 177, TS_BOT = 939;
 // Placeholder for serial communication
 char inString;
 
-// OBJECT INITIALIZATION
-// Inititize an HX711 object
+/*OBJECT INITIALIZATION*/
+// Initialize an object for the HX711 called "scale"
 HX711 scale;
-
-// Initialize a stepper and the pins it will use
+// Initialize an object for the stepper called "stepper" and the pins it will use
 AccelStepper stepper = AccelStepper(motor_interface_type, STEP, DIR); // Defaults to AccelStepper::FULL4WIRE (4 pins) on 2, 3, 4, 5
-
-// Adafruit_MotorShield AFMS = Adafruit_MotorShield();
-
-// // Connect a stepper motor with 200 steps per revolution (1.8 degree)
-// // to motor port #2 (M3 and M4)
-// Adafruit_StepperMotor *myStepper = AFMS.getStepper(200, 2);
+// Initialize an object for the screen called "tft"
+MCUFRIEND_kbv tft;
 
 byte read_line(char *buffer, byte buffer_length)
 {
