@@ -8,8 +8,8 @@
  *
 **/
 
-#ifndef kaboom_h
-#define kaboom_h
+#ifndef KABOOM_h
+#define KABOOM_h
 
 #if ARDUINO >= 100
 #include "Arduino.h"
@@ -28,7 +28,6 @@ private:
 
 public:
     kaboom();
-
     virtual ~kaboom();
 
     // read the analog pins that have been defined
@@ -61,4 +60,6 @@ public:
     void conveyKaboom();
 };
 
-#endif /* kaboom_h */
+#endif /* KABOOM_h */
+
+
