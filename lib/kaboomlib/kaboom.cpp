@@ -1,102 +1,22 @@
-/*Libraries for Load Cell Amp*/
+/**
+ *
+ * kaboom library for Arduino
+ * URL...
+ *
+ * MIT License
+ * (c) 2023 Aunders Hallsten
+ *
+**/
+#include <Arduino.h>
 #include "HX711.h"
-#include <SPI.h>
-#include <Wire.h>
-/*Libraries for Stepper Driver*/
-#include <AccelStepper.h>
-#include <Servo.h>
-/*Libraries for 3.5TFT*/
-#include <Adafruit_GFX.h>
-#include <MCUFRIEND_kbv.h>
-#include <TouchScreen.h>
 
-/*PIN SELECTIONS AND DEFINITIONS*/
-// HX711 circuit wiring
-#define LOADCELL_SCK_PIN 21
-#define LOADCELL_DOUT_PIN 20
-// STEPPER circuit wiring
-// #define STOP 2
-// #define AXISSELECT 3
-#define DIR 6
-#define STEP 4
-#define SLEEP 5
-// #define RESET 40
-// #define FAULT 42
-// Units of Scale
-#define UNITS_G 0
-#define UNITS_GN 1
+kaboom::kaboom() {
+}
 
-// Screen Analog Values
-#define MINPRESSURE 200
-#define MAXPRESSURE 1000
-// Screen Colors
-#define BLACK 0x0000
-#define BLUE 0x001F
-#define RED 0xF800
-#define GREEN 0x07E0
-#define CYAN 0x07FF
-#define MAGENTA 0xF81F
-#define YELLOW 0xFFE0
-#define WHITE 0xFFFF
+kaboom::~kaboom() {
+}
 
-/*VARIABLES*/
-// HX711 variables
-byte setting_sample_average = 10;
-bool tare_button_state;
-byte scale_init_count = 0;
-byte scale_init_count_threshold = 20; // max loops to wait for scale settling
-int threshold = 20;                   // value used to test when scale has settled
-int amplitude;                        // difference between old and new readings.
-int read_avg = 5;                     // number of average readings to take
-byte count = 5;                       // quantity needed for determine stability of reading
-unsigned long delay_ms = 20;
-int init_retries = 5;
-int powder_current;    // amount of powder in the tray currently
-int powder_to_deliver; // Powder called for by user
-int setting_tare_point;
-int setting_average_amount;
-byte setting_units; // Lbs or kg?
-int setting_calibration_factor = 1000;
-// STEPPER variables
-int motor_interface_type = 1; // Type 1 is a Driver with 2 pins, STEP and DIR
-long accel = 1200;
-long max_speed = 1200;
-long speed = 1000;
-int pos = 0;
-float mode_state = 1;
-int mode_high_speed = 1000; // default for full step mode
-byte tol = 5;
-float minAccel = 0;
-float maxAccel = 80000;
-float minSpeed = 700;
-float maxspeed = 5000;
-float minPos = 0;
-float maxPos = 5000;
-long step = 0;
-// TFT variables
-const int XP = 7, XM = A1, YP = A2, YM = 6; // 320x480 ID=0x6814
-const int TS_LEFT = 176, TS_RT = 921, TS_TOP = 177, TS_BOT = 939;
-uint16_t x0 = 80; // location for inputs
-uint16_t y0 = 20;
-char buf[11];         // buffer for number inputs
-int pixel_x, pixel_y; // Touch_getXY() updates global vars
-
-// Serial communication variables
-char inString;
-
-/*OBJECT INITIALIZATION*/
-// Initialize an object for the HX711 called "scale"
-HX711 scale;
-// Initialize an object for the stepper called "stepper" and the pins it will use
-AccelStepper stepper = AccelStepper(motor_interface_type, STEP, DIR); // Defaults to AccelStepper::FULL4WIRE (4 pins) on 2, 3, 4, 5
-// Initialize an object for the screen called "tft" for graphics
-MCUFRIEND_kbv tft;
-// Initialize an object for the screen called "ts" for touch
-TouchScreen ts = TouchScreen(XP, YP, XM, YM, 300);
-// Initialize button objects for UI
-Adafruit_GFX_Button one_btn, two_btn, three_btn, four_btn, five_btn, six_btn, seven_btn, eight_btn, nine_btn, zero_btn, back_btn, fwd_btn;
-
-bool Touch_getXY(void)
+bool kaboom::Touch_getXY(void)
 {
   TSPoint p = ts.getPoint();
   pinMode(YP, OUTPUT); // restore shared pins
@@ -112,7 +32,7 @@ bool Touch_getXY(void)
   return pressed;
 }
 
-void buttonInitialization() // create buttons with location, color, text, and text size
+void kaboom::buttonInitialization() // create buttons with location, color, text, and text size
 {
   one_btn.initButton(&tft, 60, 120, 80, 80, YELLOW, MAGENTA, CYAN, "1", 3);
   two_btn.initButton(&tft, 160, 120, 80, 80, YELLOW, MAGENTA, CYAN, "2", 3);
@@ -128,7 +48,7 @@ void buttonInitialization() // create buttons with location, color, text, and te
   fwd_btn.initButton(&tft, 260, 420, 80, 80, YELLOW, MAGENTA, CYAN, "->", 3);
 }
 
-void drawNumberButtons()
+void kaboom::drawNumberButtons()
 {
   one_btn.drawButton(false);
   two_btn.drawButton(false);
@@ -144,7 +64,7 @@ void drawNumberButtons()
   fwd_btn.drawButton(false);
 }
 
-void tftSetup()
+void kaboom::tftSetup()
 {
   uint16_t ID = tft.readID();
   // Serial.print("TFT ID = 0x");  // show tft ID via serial port
@@ -162,7 +82,7 @@ void tftSetup()
   tft.print(buf);
 }
 
-void buttonChecks() // Check buttons if any has been pressed
+void kaboom::buttonChecks() // Check buttons if any has been pressed
 {
   // while(1) // loop until fwd button is pressed
   // {
@@ -317,7 +237,7 @@ void buttonChecks() // Check buttons if any has been pressed
   //}
 }
 
-byte read_line(char *buffer, byte buffer_length) // a way to read incoming data from serial port
+byte kaboom::read_line(char *buffer, byte buffer_length) // a way to read incoming data from serial port
 {
   memset(buffer, 0, buffer_length); // Clear buffer
 
@@ -364,7 +284,7 @@ byte read_line(char *buffer, byte buffer_length) // a way to read incoming data 
   return read_length;
 }
 
-void displayMenu() // call to tell user how to navigate the UI
+void kaboom::displayMenu() // call to tell user how to navigate the UI
 {
   Serial.println();
   Serial.println(F("Main Menu:"));
@@ -376,7 +296,7 @@ void displayMenu() // call to tell user how to navigate the UI
   Serial.println(F("x) Exit"));
 }
 
-void readScale()
+void kaboom::readScale()
 {
   while (!Serial.available())
   {
@@ -386,7 +306,7 @@ void readScale()
   displayMenu();
 }
 
-void scaleInitialize()
+void kaboom::scaleInitialize()
 {
   Serial.println("Initializing Scale on pins:");
   Serial.print("SDA: ");
@@ -422,7 +342,7 @@ void scaleInitialize()
   // }
 }
 
-void tareScale()
+void kaboom::tareScale()
 {
   Serial.print(F("\n\rGetting Tare point: "));
   scale.tare();                                // Reset the scale to 0
@@ -454,7 +374,7 @@ void tareScale()
   }
 }
 
-void calibrateScale()
+void kaboom::calibrateScale()
 {
   Serial.println("Put the 50g weight on the scale and enter serial");
   Serial.println("calibrating...");
@@ -468,7 +388,7 @@ void calibrateScale()
   Serial.println(scale.get_units());
 }
 
-void calibrate_scale(void)
+void kaboom::calibrate_scale(void)
 {
   Serial.println();
   Serial.println();
@@ -544,14 +464,14 @@ void calibrate_scale(void)
   Serial.println();
 }
 
-void stepperInitialize()
+void kaboom::stepperInitialize()
 {
   stepper.setMaxSpeed(max_speed);
   stepper.setSpeed(speed);
   stepper.setAcceleration(accel);
 }
 
-void conveyKaboom()
+void kaboom::conveyKaboom()
 {
 
   while (powder_current <= powder_to_deliver)
@@ -568,53 +488,5 @@ void conveyKaboom()
     stepper.move(step);
     stepper.run();
     powder_current = scale.read();
-  }
-}
-
-void setup()
-{
-  Serial.begin(115200);
-  Serial.println("Kaboom Konveyor V0.1");
-  stepperInitialize();
-  scaleInitialize();
-  displayMenu();
-}
-
-void loop()
-{
-  buttonChecks();
-  if (Serial.available())
-  {
-    // Read command
-    inString = Serial.read();
-    Serial.print("recieved: ");
-    Serial.println(inString);
-
-    // Execute command
-    if (inString == '1')
-    {
-      conveyKaboom();
-    }
-    else if (inString == '2')
-    {
-      tareScale();
-    }
-    else if (inString == '3')
-    {
-      calibrateScale();
-    }
-    else if (inString == '4')
-    {
-      readScale();
-    }
-    else if (inString == '5')
-    {
-      delay(500);
-    }
-    else if (inString == 'x')
-    {
-      // Do nothing, just exit
-      Serial.println(F("Exited System Config, press any key to go back into System Config"));
-    }
   }
 }
