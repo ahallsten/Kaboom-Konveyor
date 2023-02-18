@@ -1,6 +1,7 @@
 bogde/HX711@^0.7.5
+C:\Users\ahallsten\Downloads\kaboomlib.zip
 waspinator/AccelStepper@^1.64
+arduino-libraries/Servo@^1.1.8
 prenticedavid/MCUFRIEND_kbv@^3.1.0-Beta
 jdolinay/avr-debugger @ ~1.4
 adafruit/Adafruit Motor Shield V2 Library@^1.1.1
-arduino-libraries/Servo@^1.1.8

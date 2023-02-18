@@ -1,0 +1,13 @@
+{
+    "name": "kaboom",
+    "version": "1.0.0",
+    "description": "A simple library with some functions and a class",
+    "keywords": ["kaboom", "library"],
+    "authors": [
+      {
+        "name": "Aunders Hallsten   ",
+        "email": "aehallsten@gmail.com"
+      }
+    ]
+  }
+  
