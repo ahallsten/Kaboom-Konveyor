@@ -6,7 +6,7 @@
  * MIT License
  * (c) 2023 Aunders Hallsten
  *
-**/
+ **/
 
 #ifndef KABOOM_h
 #define KABOOM_h
@@ -25,7 +25,7 @@ private:
     byte GAIN;       // amplification factor
     long OFFSET = 0; // used for tare weight
     float SCALE = 1; // used to return weight in grams, kg, ounces, whatever
-
+    
 public:
     kaboom();
     virtual ~kaboom();
@@ -61,5 +61,3 @@ public:
 };
 
 #endif /* KABOOM_h */
-
-

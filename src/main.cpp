@@ -9,6 +9,7 @@
 #include <Adafruit_GFX.h>
 #include <MCUFRIEND_kbv.h>
 #include <TouchScreen.h>
+#include "kaboom.h"
 
 /*PIN SELECTIONS AND DEFINITIONS*/
 // HX711 circuit wiring

@@ -6,14 +6,117 @@
  * MIT License
  * (c) 2023 Aunders Hallsten
  *
-**/
+ **/
 #include <Arduino.h>
-#include "HX711.h"
+/*Libraries for Load Cell Amp*/
+#include <HX711.h>
+#include <SPI.h>
+#include <Wire.h>
+/*Libraries for Stepper Driver*/
+#include <AccelStepper.h>
+#include <Servo.h>
+/*Libraries for 3.5TFT*/
+#include <Adafruit_GFX.h>
+#include <MCUFRIEND_kbv.h>
+#include <TouchScreen.h>
+/*Custom Libraries*/
+#include "kaboom.h"
 
-kaboom::kaboom() {
+
+/*PIN SELECTIONS AND DEFINITIONS*/
+// HX711 circuit wiring
+#define LOADCELL_SCK_PIN 21
+#define LOADCELL_DOUT_PIN 20
+// STEPPER circuit wiring
+// #define STOP 2
+// #define AXISSELECT 3
+#define DIR 6
+#define STEP 4
+#define SLEEP 5
+// #define RESET 40
+// #define FAULT 42
+// Units of Scale
+#define UNITS_G 0
+#define UNITS_GN 1
+
+// Screen Analog Values
+#define MINPRESSURE 200
+#define MAXPRESSURE 1000
+// Screen Colors
+#define BLACK 0x0000
+#define BLUE 0x001F
+#define RED 0xF800
+#define GREEN 0x07E0
+#define CYAN 0x07FF
+#define MAGENTA 0xF81F
+#define YELLOW 0xFFE0
+#define WHITE 0xFFFF
+
+
+/*VARIABLES*/
+// HX711 variables
+byte setting_sample_average = 10;
+bool tare_button_state;
+byte scale_init_count = 0;
+byte scale_init_count_threshold = 20; // max loops to wait for scale settling
+int threshold = 20;                   // value used to test when scale has settled
+int amplitude;                        // difference between old and new readings.
+int read_avg = 5;                     // number of average readings to take
+byte count = 5;                       // quantity needed for determine stability of reading
+unsigned long delay_ms = 20;
+int init_retries = 5;
+int powder_current;    // amount of powder in the tray currently
+int powder_to_deliver; // Powder called for by user
+int setting_tare_point;
+int setting_average_amount;
+byte setting_units; // Lbs or kg?
+int setting_calibration_factor = 1000;
+// STEPPER variables
+int motor_interface_type = 1; // Type 1 is a Driver with 2 pins, STEP and DIR
+long accel = 1200;
+long max_speed = 1200;
+long speed = 1000;
+int pos = 0;
+float mode_state = 1;
+int mode_high_speed = 1000; // default for full step mode
+byte tol = 5;
+float minAccel = 0;
+float maxAccel = 80000;
+float minSpeed = 700;
+float maxspeed = 5000;
+float minPos = 0;
+float maxPos = 5000;
+long step = 0;
+// TFT variables
+const int XP = 7, XM = A1, YP = A2, YM = 6; // 320x480 ID=0x6814
+const int TS_LEFT = 176, TS_RT = 921, TS_TOP = 177, TS_BOT = 939;
+uint16_t x0 = 80; // location for inputs
+uint16_t y0 = 20;
+char buf[11];         // buffer for number inputs
+int pixel_x, pixel_y; // Touch_getXY() updates global vars
+// Serial communication variables
+char inString;
+
+
+/*OBJECT INITIALIZATION*/
+// Initialize an object for the HX711 called "scale"
+HX711 scale;
+// Initialize an object for the stepper called "stepper" and the pins it will use
+AccelStepper stepper = AccelStepper(motor_interface_type, STEP, DIR); // Defaults to AccelStepper::FULL4WIRE (4 pinsSerial) on 2, 3, 4, 5
+// Initialize an object for the screen called "tft" for graphics
+MCUFRIEND_kbv tft;
+// Initialize an object for the screen called "ts" for touch
+TouchScreen ts = TouchScreen(XP, YP, XM, YM, 300);
+// Initialize button objects for UI
+Adafruit_GFX_Button one_btn, two_btn, three_btn, four_btn, five_btn, six_btn, seven_btn, eight_btn, nine_btn, zero_btn, back_btn, fwd_btn, conveyKaboom_btn, calibrate_btn, scaleRead_btn, testMode_btn;
+
+
+kaboom::kaboom()
+{
 }
 
-kaboom::~kaboom() {
+kaboom::~kaboom()
+{
 }
 
 bool kaboom::Touch_getXY(void)
@@ -232,7 +335,7 @@ void kaboom::buttonChecks() // Check buttons if any has been pressed
     sprintf(buf, "%10s", "forward");
     tft.setCursor(x0, y0);
     tft.print(buf);
-    //break;
+    // break;
   }
   //}
 }
