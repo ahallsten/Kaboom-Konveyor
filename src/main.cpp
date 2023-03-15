@@ -40,6 +40,9 @@
 #define YELLOW 0xFFE0
 #define WHITE 0xFFFF
 
+
+// commiting some random stuff
+
 /*VARIABLES*/
 // HX711 variables
 byte setting_sample_average = 10;
