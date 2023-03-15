@@ -1,6 +1,6 @@
-adafruit/Adafruit Motor Shield V2 Library@^1.1.1
-prenticedavid/MCUFRIEND_kbv@^3.1.0-Beta
-waspinator/AccelStepper@^1.64
-bogde/HX711@^0.7.5
 arduino-libraries/Servo@^1.1.8
+adafruit/Adafruit Motor Shield V2 Library@^1.1.1
+bogde/HX711@^0.7.5
+waspinator/AccelStepper@^1.64
+prenticedavid/MCUFRIEND_kbv@^3.1.0-Beta
 jdolinay/avr-debugger @ ~1.4

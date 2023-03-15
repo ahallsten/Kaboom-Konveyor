@@ -9,7 +9,7 @@
 #include <Adafruit_GFX.h>
 #include <MCUFRIEND_kbv.h>
 #include <TouchScreen.h>
-#include "kaboom.h"
+// #include "kaboom.h"
 
 /*PIN SELECTIONS AND DEFINITIONS*/
 // HX711 circuit wiring
@@ -35,8 +35,8 @@
 #define BLUE 0x001F
 #define RED 0xF800
 #define GREEN 0x07E0
-#define CYAN 0x07FF
-#define MAGENTA 0xF81F
+#define RED 0x07FF
+#define GREEN 0xF81F
 #define YELLOW 0xFFE0
 #define WHITE 0xFFFF
 
@@ -46,7 +46,6 @@
 /*VARIABLES*/
 // HX711 variables
 byte setting_sample_average = 10;
-bool tare_button_state;
 byte scale_init_count = 0;
 byte scale_init_count_threshold = 20; // max loops to wait for scale settling
 int threshold = 20;                   // value used to test when scale has settled
@@ -61,6 +60,11 @@ int setting_tare_point;
 int setting_average_amount;
 byte setting_units; // Lbs or kg?
 int setting_calibration_factor = 1000;
+float raw_reading;
+float scale_reading;
+float cal_factor;
+long tare_point;
+float cal_weight = 50.43; // 50g cal weight
 // STEPPER variables
 int motor_interface_type = 1; // Type 1 is a Driver with 2 pins, STEP and DIR
 long accel = 1200;
@@ -80,13 +84,28 @@ long step = 0;
 // TFT variables
 const int XP = 7, XM = A1, YP = A2, YM = 6; // 320x480 ID=0x6814
 const int TS_LEFT = 176, TS_RT = 921, TS_TOP = 177, TS_BOT = 939;
-uint16_t x0 = 80; // location for inputs
+uint16_t ID;
+uint16_t x0 = 0; // location for inputs
 uint16_t y0 = 20;
+uint16_t x1 = 60; // location for inputs
+uint16_t y1 = 60;
+uint16_t x2 = 60; // location for inputs
+uint16_t y2 = 90;
+uint16_t x3 = 60; // location for inputs
+uint16_t y3 = 120;
+uint16_t x4 = 60; // location for inputs
+uint16_t y4 = 150;
+uint16_t x5 = 60; // location for inputs
+uint16_t y5 = 180;
+uint16_t x6 = 60; // location for inputs
+uint16_t y6 = 210;
 char buf[11];         // buffer for number inputs
+char buf2[11];        // buffer for number inputs
 int pixel_x, pixel_y; // Touch_getXY() updates global vars
-
 // Serial communication variables
 char inString;
+bool finish = 1;
+bool home = 1;
 
 /*OBJECT INITIALIZATION*/
 // Initialize an object for the HX711 called "scale"
@@ -98,8 +117,9 @@ MCUFRIEND_kbv tft;
 // Initialize an object for the screen called "ts" for touch
 TouchScreen ts = TouchScreen(XP, YP, XM, YM, 300);
 // Initialize button objects for UI
-Adafruit_GFX_Button one_btn, two_btn, three_btn, four_btn, five_btn, six_btn, seven_btn, eight_btn, nine_btn, zero_btn, back_btn, fwd_btn, conveyKaboom_btn, calibrate_btn, scaleRead_btn, testMode_btn;
+Adafruit_GFX_Button one_btn, two_btn, three_btn, four_btn, five_btn, six_btn, seven_btn, eight_btn, nine_btn, zero_btn, back_btn, fwd_btn, up_btn, down_btn, conveyKaboom_btn, other_btn, scaleRead_btn, testMode_btn, home_btn, tare_ready_btn, calibrate_btn;
 
+/*HOME BREW FUNCTIONS*/
 bool Touch_getXY(void)
 {
   TSPoint p = ts.getPoint();
@@ -118,22 +138,52 @@ bool Touch_getXY(void)
 
 void buttonInitialization() // create buttons with location, color, text, and text size
 {
-  one_btn.initButton(&tft, 60, 120, 80, 80, YELLOW, MAGENTA, CYAN, "1", 3);
-  two_btn.initButton(&tft, 160, 120, 80, 80, YELLOW, MAGENTA, CYAN, "2", 3);
-  three_btn.initButton(&tft, 260, 120, 80, 80, YELLOW, MAGENTA, CYAN, "3", 3);
-  four_btn.initButton(&tft, 60, 220, 80, 80, YELLOW, MAGENTA, CYAN, "4", 3);
-  five_btn.initButton(&tft, 160, 220, 80, 80, YELLOW, MAGENTA, CYAN, "5", 3);
-  six_btn.initButton(&tft, 260, 220, 80, 80, YELLOW, MAGENTA, CYAN, "6", 3);
-  seven_btn.initButton(&tft, 60, 320, 80, 80, YELLOW, MAGENTA, CYAN, "7", 3);
-  eight_btn.initButton(&tft, 160, 320, 80, 80, YELLOW, MAGENTA, CYAN, "8", 3);
-  nine_btn.initButton(&tft, 260, 320, 80, 80, YELLOW, MAGENTA, CYAN, "9", 3);
-  zero_btn.initButton(&tft, 160, 420, 80, 80, YELLOW, MAGENTA, CYAN, "0", 3);
-  back_btn.initButton(&tft, 60, 420, 80, 80, YELLOW, MAGENTA, CYAN, "<-", 3);
-  fwd_btn.initButton(&tft, 260, 420, 80, 80, YELLOW, MAGENTA, CYAN, "->", 3);
-  conveyKaboom_btn.initButton(&tft, 60, 120, 280, 80, YELLOW, MAGENTA, CYAN, "Convey Kaboom", 3);
-  calibrate_btn.initButton(&tft, 60, 220, 280, 80, YELLOW, MAGENTA, CYAN, "Calibrate", 3);
-  scaleRead_btn.initButton(&tft, 60, 320, 280, 80, YELLOW, MAGENTA, CYAN, "Scale Raw Read", 3);
-  testMode_btn.initButton(&tft, 60, 420, 280, 80, YELLOW, MAGENTA, CYAN, "Test Mode", 3);
+  one_btn.initButton(&tft, 60, 120, 80, 80, YELLOW, GREEN, RED, "1", 3);
+  two_btn.initButton(&tft, 160, 120, 80, 80, YELLOW, GREEN, RED, "2", 3);
+  three_btn.initButton(&tft, 260, 120, 80, 80, YELLOW, GREEN, RED, "3", 3);
+  four_btn.initButton(&tft, 60, 220, 80, 80, YELLOW, GREEN, RED, "4", 3);
+  five_btn.initButton(&tft, 160, 220, 80, 80, YELLOW, GREEN, RED, "5", 3);
+  six_btn.initButton(&tft, 260, 220, 80, 80, YELLOW, GREEN, RED, "6", 3);
+  seven_btn.initButton(&tft, 60, 320, 80, 80, YELLOW, GREEN, RED, "7", 3);
+  eight_btn.initButton(&tft, 160, 320, 80, 80, YELLOW, GREEN, RED, "8", 3);
+  nine_btn.initButton(&tft, 260, 320, 80, 80, YELLOW, GREEN, RED, "9", 3);
+  zero_btn.initButton(&tft, 160, 420, 80, 80, YELLOW, GREEN, RED, "0", 3);
+
+  conveyKaboom_btn.initButton(&tft, 160, 120, 280, 80, YELLOW, GREEN, RED, "Convey \n Kaboom", 2);
+  other_btn.initButton(&tft, 160, 220, 280, 80, YELLOW, GREEN, RED, "Other", 3);
+  scaleRead_btn.initButton(&tft, 160, 320, 280, 80, YELLOW, GREEN, RED, "Scale Raw Read", 3);
+  testMode_btn.initButton(&tft, 160, 420, 280, 80, YELLOW, GREEN, RED, "Test Mode", 3);
+
+  back_btn.initButton(&tft, 60, 420, 80, 80, YELLOW, GREEN, RED, "<-", 3); // work on positions
+  fwd_btn.initButton(&tft, 260, 420, 80, 80, YELLOW, GREEN, RED, "->", 3); 
+  up_btn.initButton(&tft, 60, 420, 80, 80, YELLOW, GREEN, RED, "up", 3);
+  down_btn.initButton(&tft, 260, 420, 80, 80, YELLOW, GREEN, RED, "dwn", 3);
+
+  tare_ready_btn.initButton(&tft, 160, 320, 280, 80, YELLOW, GREEN, RED, "Tare", 3);
+  home_btn.initButton(&tft, 160, 420, 280, 80, YELLOW, GREEN, RED, "Home", 3);
+  calibrate_btn.initButton(&tft, 160, 220, 280, 80, YELLOW, GREEN, RED, "Calibrate", 3);
+}
+
+void tftInitialize()
+{
+  ID = tft.readID();
+  tft.begin(ID);
+  tft.setRotation(0); // PORTRAIT
+  tft.fillScreen(BLACK);
+  tft.setTextColor(WHITE, BLACK);
+  tft.setTextSize(2);
+  tft.setCursor(0, y0);
+  sprintf(buf, "%-10s", "Kaboom Konveyor V0.3");
+  tft.print(buf);
+  buttonInitialization();
+}
+
+void drawMainMenuButtons()
+{
+  conveyKaboom_btn.drawButton(false);
+  other_btn.drawButton(false);
+  scaleRead_btn.drawButton(false);
+  testMode_btn.drawButton(false);
 }
 
 void drawNumberButtons()
@@ -152,234 +202,11 @@ void drawNumberButtons()
   fwd_btn.drawButton(false);
 }
 
-void tftSetup()
+void drawScaleReadButtons()
 {
-  uint16_t ID = tft.readID();
-  // Serial.print("TFT ID = 0x");  // show tft ID via serial port
-  // Serial.println(ID, HEX);
-  // Serial.println("Calibrate for your Touch Panel");
-  if (ID == 0xD3D3)
-    ID = 0x9486; // write-only shield
-  tft.begin(ID);
-  tft.setRotation(0); // PORTRAIT
-  tft.fillScreen(BLACK);
-  tft.setTextColor(WHITE, BLACK);
-  tft.setTextSize(3);
-  tft.setCursor(260, y0);
-  sprintf(buf, "%-10s", "gns");
-  tft.print(buf);
-}
-
-void drawMainMenuButtons()
-{
-  conveyKaboom_btn.drawButton(false);
-  calibrate_btn.drawButton(false);
-  scaleRead_btn.drawButton(false);
-  testMode_btn.drawButton(false);
-}
-
-void buttonChecks() // Check buttons if any has been pressed
-{
-  // while(1) // loop until fwd button is pressed
-  // {
-  bool down = Touch_getXY();
-  one_btn.press(down && one_btn.contains(pixel_x, pixel_y));
-  two_btn.press(down && two_btn.contains(pixel_x, pixel_y));
-  three_btn.press(down && three_btn.contains(pixel_x, pixel_y));
-  four_btn.press(down && four_btn.contains(pixel_x, pixel_y));
-  five_btn.press(down && five_btn.contains(pixel_x, pixel_y));
-  six_btn.press(down && six_btn.contains(pixel_x, pixel_y));
-  seven_btn.press(down && seven_btn.contains(pixel_x, pixel_y));
-  eight_btn.press(down && eight_btn.contains(pixel_x, pixel_y));
-  nine_btn.press(down && nine_btn.contains(pixel_x, pixel_y));
-  zero_btn.press(down && zero_btn.contains(pixel_x, pixel_y));
-  back_btn.press(down && back_btn.contains(pixel_x, pixel_y));
-  fwd_btn.press(down && fwd_btn.contains(pixel_x, pixel_y));
-  conveyKaboom_btn.press(down && conveyKaboom_btn.contains(pixel_x, pixel_y));
-  calibrate_btn.press(down && calibrate_btn.contains(pixel_x, pixel_y));
-  scaleRead_btn.press(down && scaleRead_btn.contains(pixel_x, pixel_y));
-  testMode_btn.press(down && testMode_btn.contains(pixel_x, pixel_y));
-
-  if (one_btn.justReleased())
-    one_btn.drawButton();
-  if (two_btn.justReleased())
-    two_btn.drawButton();
-  if (three_btn.justReleased())
-    three_btn.drawButton();
-  if (four_btn.justReleased())
-    four_btn.drawButton();
-  if (five_btn.justReleased())
-    five_btn.drawButton();
-  if (six_btn.justReleased())
-    six_btn.drawButton();
-  if (seven_btn.justReleased())
-    seven_btn.drawButton();
-  if (eight_btn.justReleased())
-    eight_btn.drawButton();
-  if (nine_btn.justReleased())
-    nine_btn.drawButton();
-  if (zero_btn.justReleased())
-    zero_btn.drawButton();
-  if (back_btn.justReleased())
-    back_btn.drawButton();
-  if (fwd_btn.justReleased())
-    fwd_btn.drawButton();
-  if (conveyKaboom_btn.justReleased())
-    conveyKaboom_btn.drawButton();
-  if (calibrate_btn.justReleased())
-    calibrate_btn.drawButton();
-  if (scaleRead_btn.justReleased())
-    scaleRead_btn.drawButton();
-  if (testMode_btn.justReleased())
-    testMode_btn.drawButton();
-
-  if (one_btn.justPressed())
-  {
-    one_btn.drawButton(true);
-    tft.setTextColor(WHITE, BLACK);
-    tft.setTextSize(3);
-    sprintf(buf, "%10d", 1);
-    tft.setCursor(x0, y0);
-    tft.print(buf);
-  }
-  if (two_btn.justPressed())
-  {
-    two_btn.drawButton(true);
-    tft.setTextColor(WHITE, BLACK);
-    tft.setTextSize(3);
-    sprintf(buf, "%10d", 2);
-    tft.setCursor(x0, y0);
-    tft.print(buf);
-  }
-  if (three_btn.justPressed())
-  {
-    three_btn.drawButton(true);
-    tft.setTextColor(WHITE, BLACK);
-    tft.setTextSize(3);
-    sprintf(buf, "%10d", 3);
-    tft.setCursor(x0, y0);
-    tft.print(buf);
-  }
-  if (four_btn.justPressed())
-  {
-    four_btn.drawButton(true);
-    tft.setTextColor(WHITE, BLACK);
-    tft.setTextSize(3);
-    sprintf(buf, "%10d", 4);
-    tft.setCursor(x0, y0);
-    tft.print(buf);
-  }
-  if (five_btn.justPressed())
-  {
-    five_btn.drawButton(true);
-    tft.setTextColor(WHITE, BLACK);
-    tft.setTextSize(3);
-    sprintf(buf, "%10d", 5);
-    tft.setCursor(x0, y0);
-    tft.print(buf);
-  }
-  if (six_btn.justPressed())
-  {
-    six_btn.drawButton(true);
-    tft.setTextColor(WHITE, BLACK);
-    tft.setTextSize(3);
-    sprintf(buf, "%10d", 6);
-    tft.setCursor(x0, y0);
-    tft.print(buf);
-  }
-  if (seven_btn.justPressed())
-  {
-    seven_btn.drawButton(true);
-    tft.setTextColor(WHITE, BLACK);
-    tft.setTextSize(3);
-    sprintf(buf, "%10d", 7);
-    tft.setCursor(x0, y0);
-    tft.print(buf);
-  }
-  if (eight_btn.justPressed())
-  {
-    eight_btn.drawButton(true);
-    tft.setTextColor(WHITE, BLACK);
-    tft.setTextSize(3);
-    sprintf(buf, "%10d", 8);
-    tft.setCursor(x0, y0);
-    tft.print(buf);
-  }
-  if (nine_btn.justPressed())
-  {
-    nine_btn.drawButton(true);
-    tft.setTextColor(WHITE, BLACK);
-    tft.setTextSize(3);
-    sprintf(buf, "%10d", 9);
-    tft.setCursor(x0, y0);
-    tft.print(buf);
-  }
-  if (zero_btn.justPressed())
-  {
-    zero_btn.drawButton(true);
-    tft.setTextColor(WHITE, BLACK);
-    tft.setTextSize(3);
-    sprintf(buf, "%10d", 0);
-    tft.setCursor(x0, y0);
-    tft.print(buf);
-  }
-  if (back_btn.justPressed())
-  {
-    back_btn.drawButton(true);
-    tft.setTextColor(WHITE, BLACK);
-    tft.setTextSize(3);
-    sprintf(buf, "%10s", "backspace");
-    tft.setCursor(x0, y0);
-    tft.print(buf);
-  }
-  if (fwd_btn.justPressed())
-  {
-    fwd_btn.drawButton(true);
-    tft.setTextColor(WHITE, BLACK);
-    tft.setTextSize(3);
-    sprintf(buf, "%10s", "forward");
-    tft.setCursor(x0, y0);
-    tft.print(buf);
-  }
-  if (conveyKaboom_btn.justPressed())
-  {
-    conveyKaboom_btn.drawButton(true);
-    tft.setTextColor(WHITE, BLACK);
-    tft.setTextSize(3);
-    sprintf(buf, "%10d", 8);
-    tft.setCursor(x0, y0);
-    tft.print(buf);
-  }
-  if (calibrate_btn.justPressed())
-  {
-    calibrate_btn.drawButton(true);
-    tft.setTextColor(WHITE, BLACK);
-    tft.setTextSize(3);
-    sprintf(buf, "%10d", 9);
-    tft.setCursor(x0, y0);
-    tft.print(buf);
-  }
-  if (scaleRead_btn.justPressed())
-  {
-    scaleRead_btn.drawButton(true);
-    tft.setTextColor(WHITE, BLACK);
-    tft.setTextSize(3);
-    sprintf(buf, "%10d", 0);
-    tft.setCursor(x0, y0);
-    tft.print(buf);
-  }
-  if (testMode_btn.justPressed())
-  {
-    testMode_btn.drawButton(true);
-    tft.setTextColor(WHITE, BLACK);
-    tft.setTextSize(3);
-    sprintf(buf, "%10s", "backspace");
-    tft.setCursor(x0, y0);
-    tft.print(buf);
-  }
-
-
-  //}
+  home_btn.drawButton();
+  tare_ready_btn.drawButton();
+  calibrate_btn.drawButton();
 }
 
 byte read_line(char *buffer, byte buffer_length) // a way to read incoming data from serial port
@@ -431,24 +258,15 @@ byte read_line(char *buffer, byte buffer_length) // a way to read incoming data 
 
 void displayMenu() // call to tell user how to navigate the UI
 {
-  Serial.println();
-  Serial.println(F("Main Menu:"));
-  Serial.println(F("1) Convey Kaboom"));
-  Serial.println(F("2) Tare Scale"));
-  Serial.println(F("3) Calibrate Scale"));
-  Serial.println(F("4) Read Scale Continuously"));
-  Serial.println(F("5) Reserved"));
-  Serial.println(F("x) Exit"));
-}
-
-void readScale()
-{
-  while (!Serial.available())
-  {
-    Serial.println(scale.read_average(read_avg));
-  }
-  Serial.println("quiting scale reading...");
-  displayMenu();
+  drawMainMenuButtons();
+  // Serial.println();
+  // Serial.println(F("Main Menu:"));
+  // Serial.println(F("1) Convey Kaboom"));
+  // Serial.println(F("2) Tare Scale"));
+  // Serial.println(F("3) Calibrate Scale"));
+  // Serial.println(F("4) Read Scale Continuously"));
+  // Serial.println(F("5) Reserved"));
+  // Serial.println(F("x) finish"));
 }
 
 void scaleInitialize()
@@ -618,7 +436,7 @@ void stepperInitialize()
 
 void conveyKaboom()
 {
-
+  // Wait for button press from screen. Ask Ready to start?
   while (powder_current <= powder_to_deliver)
   {
     if (Serial.available())
@@ -627,7 +445,7 @@ void conveyKaboom()
       inString = Serial.read();
       Serial.print("recieved: ");
       Serial.println(inString);
-      Serial.print("exiting kaboom conveyance");
+      Serial.print("finishing kaboom conveyance");
     }
     step = 1;
     stepper.move(step);
@@ -636,51 +454,479 @@ void conveyKaboom()
   }
 }
 
+bool readScaleButtonChecks()
+{
+  bool down = Touch_getXY(); // need to find out if I need this
+  home_btn.press(down && home_btn.contains(pixel_x, pixel_y));
+  tare_ready_btn.press(down && tare_ready_btn.contains(pixel_x, pixel_y));
+  calibrate_btn.press(down && calibrate_btn.contains(pixel_x, pixel_y));
+
+  if (home_btn.justReleased())
+    home_btn.drawButton();
+  if (tare_ready_btn.justReleased())
+    tare_ready_btn.drawButton();
+  if (calibrate_btn.justReleased())
+    calibrate_btn.drawButton();
+
+  if (home_btn.justPressed())
+  {
+    home_btn.drawButton(true);
+    tft.setTextColor(WHITE, BLACK);
+    tft.setTextSize(3);
+    sprintf(buf, "%10s", "going home");
+    tft.setCursor(x0, y0);
+    tft.print(buf);
+    home = !home;
+  }
+  if (tare_ready_btn.justPressed())
+  {
+    tare_ready_btn.drawButton(true);
+    tft.setTextColor(WHITE, BLACK);
+    tft.setTextSize(3);
+    sprintf(buf, "%10s", "tareing scale");
+    tft.setCursor(x1, y1);
+    tft.print(buf);
+    finish = !finish;
+  }
+  if (calibrate_btn.justPressed())
+  {
+    calibrate_btn.drawButton(true);
+    tft.setTextColor(WHITE, BLACK);
+    tft.setTextSize(3);
+    sprintf(buf, "%10s", "Calibrating   ");
+    tft.setCursor(x1, y1);
+    tft.print(buf);
+    finish = !finish;
+  }
+  return finish;
+}
+
+void readScale()
+{
+  tft.fillScreen(BLACK);
+  sprintf(buf, "%14s", "tare when ready");
+  tft.setTextColor(WHITE, BLACK);
+  tft.setTextSize(3);
+  tft.setCursor(x0, y0);
+  tft.print(buf);
+
+  sprintf(buf, "%14s", "raw reading:");
+  tft.setTextColor(WHITE, BLACK);
+  tft.setTextSize(3);
+  tft.setCursor(x1, y1);
+  tft.print(buf);
+  drawScaleReadButtons();
+
+  while (finish) // FIRST TARE LOOP, print the raw reading and check for user to press tare or home !tare_ready_btn.justPressed() | !home_btn.justPressed()
+  {
+    raw_reading = scale.read_average(read_avg);
+    sprintf(buf, "%10.2f", raw_reading);
+    tft.setTextColor(WHITE, BLACK);
+    tft.setTextSize(3);
+    tft.setCursor(x2, y2);
+    tft.print(raw_reading, 2);
+    finish = readScaleButtonChecks();
+  }
+  finish = !finish; // toggle finish back
+  sprintf(buf, "%14s", "tare offset:");
+  tft.setTextColor(WHITE, BLACK);
+  tft.setTextSize(3);
+  tft.setCursor(x3, y3);
+  tft.print(buf);
+  scale.tare();
+  scale.set_scale();
+  tare_point = scale.get_offset();
+  delay(500);
+
+  sprintf(buf2, "%14d", tare_point); // print the offset to get a zero scale reading
+  tft.setTextColor(WHITE, BLACK);
+  tft.setTextSize(3);
+  tft.setCursor(x4, y4);
+  tft.print(buf2);
+
+  tft.fillRect(0, y0, 320, 30, BLACK);    // erase raw reading: indicator
+  sprintf(buf, "%14s", "cal when ready"); // replace with raw/w/tare: indicator
+  tft.setTextColor(WHITE, BLACK);
+  tft.setTextSize(3);
+  tft.setCursor(x0, y0);
+  tft.print(buf);
+
+  tft.fillRect(0, y1, 320, 30, BLACK); // erase raw reading: indicator
+  sprintf(buf, "%14s", "raw w/tare:"); // replace with raw/w/tare: indicator
+  tft.setTextColor(WHITE, BLACK);
+  tft.setTextSize(3);
+  tft.setCursor(x1, y1);
+  tft.print(buf);
+
+  while (finish) // SECOND CALIBRATE LOOP, print the raw reading and wait for user to press calibrate or home
+  {
+    scale_reading = scale.get_value(read_avg);
+    sprintf(buf, "%10.2f", scale_reading);
+    tft.setTextColor(WHITE, BLACK);
+    tft.setTextSize(3);
+    tft.setCursor(x2, y2);
+    tft.print(scale_reading, 2);
+    finish = readScaleButtonChecks();
+  }
+  finish = !finish; // toggle finish back
+
+  tft.fillRect(0, y3, 320, 30, BLACK); // erase tare offset: indicator
+  sprintf(buf, "%14s", "cal factor:"); // replace with cal factor: indicator
+  tft.setTextColor(WHITE, BLACK);
+  tft.setTextSize(3);
+  tft.setCursor(x3, y3);
+  tft.print(buf);
+  cal_factor = (scale_reading - raw_reading) / cal_weight;
+  scale.set_scale(cal_factor);
+  delay(500);
+
+  sprintf(buf, "%14d", scale.get_scale()); // print the cal factor reading
+  tft.setTextColor(WHITE, BLACK);
+  tft.setTextSize(3);
+  tft.setCursor(x4, y4);
+  tft.print(buf);
+
+  tft.fillRect(0, y0, 320, 30, BLACK);      // erase raw reading: indicator
+  sprintf(buf, "%14s", "read or go home:"); // replace with raw/w/tare: indicator
+  tft.setTextColor(WHITE, BLACK);
+  tft.setTextSize(3);
+  tft.setCursor(x1, y1);
+  tft.print(buf);
+
+  tft.fillRect(0, y1, 320, 30, BLACK);    // erase raw w/tare: indicator
+  sprintf(buf, "%14s", "real readout: "); // replace with real reading
+  tft.setTextColor(WHITE, BLACK);
+  tft.setTextSize(3);
+  tft.setCursor(x1, y1);
+  tft.print(buf);
+
+  tft.fillRect(0, y2, 320, 30, BLACK); // erase scale_reading readout
+
+  while (finish) // THRID SET SCALE CALIBRATION LOOP, print the scale reading and check for user to press calibrate or home
+  {
+    scale_reading = scale.get_units(read_avg);
+    sprintf(buf, "%10.2f", scale_reading);
+    tft.setTextColor(WHITE, BLACK);
+    tft.setTextSize(3);
+    tft.setCursor(x2, y2);
+    tft.print(scale_reading, 2);
+    finish = readScaleButtonChecks();
+  }
+}
+
+bool testModeButtonChecks()
+{
+  bool down = Touch_getXY(); // need to find out if I need this
+  home_btn.press(down && home_btn.contains(pixel_x, pixel_y));
+  fwd_btn.press(down && fwd_btn.contains(pixel_x, pixel_y));
+  back_btn.press(down && back_btn.contains(pixel_x, pixel_y));
+
+  if (home_btn.justReleased())
+    home_btn.drawButton();
+  if (tare_ready_btn.justReleased())
+    tare_ready_btn.drawButton();
+  if (calibrate_btn.justReleased())
+    calibrate_btn.drawButton();
+
+  if (home_btn.justPressed())
+  {
+    home_btn.drawButton(true);
+    tft.setTextColor(WHITE, BLACK);
+    tft.setTextSize(3);
+    sprintf(buf, "%10s", "going home");
+    tft.setCursor(x0, y0);
+    tft.print(buf);
+    home = !home;
+  }
+  if (tare_ready_btn.justPressed())
+  {
+    tare_ready_btn.drawButton(true);
+    tft.setTextColor(WHITE, BLACK);
+    tft.setTextSize(3);
+    sprintf(buf, "%10s", "tareing scale");
+    tft.setCursor(x1, y1);
+    tft.print(buf);
+    finish = !finish;
+  }
+  if (calibrate_btn.justPressed())
+  {
+    calibrate_btn.drawButton(true);
+    tft.setTextColor(WHITE, BLACK);
+    tft.setTextSize(3);
+    sprintf(buf, "%10s", "Calibrating   ");
+    tft.setCursor(x1, y1);
+    tft.print(buf);
+    finish = !finish;
+  }
+  return finish;
+}
+
+void testMode()
+{
+}
+
+void mainMenuButtonChecks() // Check buttons if any has been pressed
+{
+  // while(1) // loop until fwd button is pressed
+  // {
+  bool down = Touch_getXY();
+  // Function to ou
+  conveyKaboom_btn.press(down && conveyKaboom_btn.contains(pixel_x, pixel_y));
+  calibrate_btn.press(down && calibrate_btn.contains(pixel_x, pixel_y));
+  scaleRead_btn.press(down && scaleRead_btn.contains(pixel_x, pixel_y));
+  testMode_btn.press(down && testMode_btn.contains(pixel_x, pixel_y));
+
+  if (conveyKaboom_btn.justReleased())
+    conveyKaboom_btn.drawButton();
+  if (calibrate_btn.justReleased())
+    calibrate_btn.drawButton();
+  if (scaleRead_btn.justReleased())
+    scaleRead_btn.drawButton();
+  if (testMode_btn.justReleased())
+    testMode_btn.drawButton();
+
+  if (conveyKaboom_btn.justPressed())
+  {
+    conveyKaboom_btn.drawButton(true);
+    tft.setTextColor(WHITE, BLACK);
+    tft.setTextSize(3);
+    sprintf(buf, "%10s", "kaboom");
+    tft.setCursor(x0, y0);
+    tft.print(buf);
+    conveyKaboom();
+  }
+  if (other_btn.justPressed())
+  {
+    other_btn.drawButton(true);
+    tft.setTextColor(WHITE, BLACK);
+    tft.setTextSize(3);
+    sprintf(buf, "%10s", "Calibrate");
+    tft.setCursor(x0, y0);
+    tft.print(buf);
+    calibrateScale();
+  }
+  if (scaleRead_btn.justPressed())
+  {
+    scaleRead_btn.drawButton(true);
+    tft.setTextColor(WHITE, BLACK);
+    tft.setTextSize(3);
+    sprintf(buf, "%10s", "Read Scale");
+    tft.setCursor(x0, y0);
+    tft.print(buf);
+    readScale();
+  }
+  if (testMode_btn.justPressed())
+  {
+    testMode_btn.drawButton(true);
+    tft.setTextColor(WHITE, BLACK);
+    tft.setTextSize(3);
+    sprintf(buf, "%10s", "Test Mode");
+    tft.setCursor(x0, y0);
+    tft.print(buf);
+  }
+}
+
+void numberInputButtonChecks()
+{
+  bool down = Touch_getXY();
+  one_btn.press(down && one_btn.contains(pixel_x, pixel_y));
+  two_btn.press(down && two_btn.contains(pixel_x, pixel_y));
+  three_btn.press(down && three_btn.contains(pixel_x, pixel_y));
+  four_btn.press(down && four_btn.contains(pixel_x, pixel_y));
+  five_btn.press(down && five_btn.contains(pixel_x, pixel_y));
+  six_btn.press(down && six_btn.contains(pixel_x, pixel_y));
+  seven_btn.press(down && seven_btn.contains(pixel_x, pixel_y));
+  eight_btn.press(down && eight_btn.contains(pixel_x, pixel_y));
+  nine_btn.press(down && nine_btn.contains(pixel_x, pixel_y));
+  zero_btn.press(down && zero_btn.contains(pixel_x, pixel_y));
+  back_btn.press(down && back_btn.contains(pixel_x, pixel_y));
+  fwd_btn.press(down && fwd_btn.contains(pixel_x, pixel_y));
+
+  if (one_btn.justReleased())
+    one_btn.drawButton();
+  if (two_btn.justReleased())
+    two_btn.drawButton();
+  if (three_btn.justReleased())
+    three_btn.drawButton();
+  if (four_btn.justReleased())
+    four_btn.drawButton();
+  if (five_btn.justReleased())
+    five_btn.drawButton();
+  if (six_btn.justReleased())
+    six_btn.drawButton();
+  if (seven_btn.justReleased())
+    seven_btn.drawButton();
+  if (eight_btn.justReleased())
+    eight_btn.drawButton();
+  if (nine_btn.justReleased())
+    nine_btn.drawButton();
+  if (zero_btn.justReleased())
+    zero_btn.drawButton();
+  if (back_btn.justReleased())
+    back_btn.drawButton();
+  if (fwd_btn.justReleased())
+    fwd_btn.drawButton();
+
+  if (one_btn.justPressed())
+  {
+    one_btn.drawButton(true);
+    tft.setTextColor(WHITE, BLACK);
+    tft.setTextSize(3);
+    sprintf(buf, "%10d", 1);
+    tft.setCursor(x0, y0);
+    tft.print(buf);
+  }
+  if (two_btn.justPressed())
+  {
+    two_btn.drawButton(true);
+    tft.setTextColor(WHITE, BLACK);
+    tft.setTextSize(3);
+    sprintf(buf, "%10d", 2);
+    tft.setCursor(x0, y0);
+    tft.print(buf);
+  }
+  if (three_btn.justPressed())
+  {
+    three_btn.drawButton(true);
+    tft.setTextColor(WHITE, BLACK);
+    tft.setTextSize(3);
+    sprintf(buf, "%10d", 3);
+    tft.setCursor(x0, y0);
+    tft.print(buf);
+  }
+  if (four_btn.justPressed())
+  {
+    four_btn.drawButton(true);
+    tft.setTextColor(WHITE, BLACK);
+    tft.setTextSize(3);
+    sprintf(buf, "%10d", 4);
+    tft.setCursor(x0, y0);
+    tft.print(buf);
+  }
+  if (five_btn.justPressed())
+  {
+    five_btn.drawButton(true);
+    tft.setTextColor(WHITE, BLACK);
+    tft.setTextSize(3);
+    sprintf(buf, "%10d", 5);
+    tft.setCursor(x0, y0);
+    tft.print(buf);
+  }
+  if (six_btn.justPressed())
+  {
+    six_btn.drawButton(true);
+    tft.setTextColor(WHITE, BLACK);
+    tft.setTextSize(3);
+    sprintf(buf, "%10d", 6);
+    tft.setCursor(x0, y0);
+    tft.print(buf);
+  }
+  if (seven_btn.justPressed())
+  {
+    seven_btn.drawButton(true);
+    tft.setTextColor(WHITE, BLACK);
+    tft.setTextSize(3);
+    sprintf(buf, "%10d", 7);
+    tft.setCursor(x0, y0);
+    tft.print(buf);
+  }
+  if (eight_btn.justPressed())
+  {
+    eight_btn.drawButton(true);
+    tft.setTextColor(WHITE, BLACK);
+    tft.setTextSize(3);
+    sprintf(buf, "%10d", 8);
+    tft.setCursor(x0, y0);
+    tft.print(buf);
+  }
+  if (nine_btn.justPressed())
+  {
+    nine_btn.drawButton(true);
+    tft.setTextColor(WHITE, BLACK);
+    tft.setTextSize(3);
+    sprintf(buf, "%10d", 9);
+    tft.setCursor(x0, y0);
+    tft.print(buf);
+  }
+  if (zero_btn.justPressed())
+  {
+    zero_btn.drawButton(true);
+    tft.setTextColor(WHITE, BLACK);
+    tft.setTextSize(3);
+    sprintf(buf, "%10d", 0);
+    tft.setCursor(x0, y0);
+    tft.print(buf);
+  }
+  if (back_btn.justPressed())
+  {
+    back_btn.drawButton(true);
+    tft.setTextColor(WHITE, BLACK);
+    tft.setTextSize(3);
+    sprintf(buf, "%10s", "backspace");
+    tft.setCursor(x0, y0);
+    tft.print(buf);
+  }
+  if (fwd_btn.justPressed())
+  {
+    fwd_btn.drawButton(true);
+    tft.setTextColor(WHITE, BLACK);
+    tft.setTextSize(3);
+    sprintf(buf, "%10s", "forward");
+    tft.setCursor(x0, y0);
+    tft.print(buf);
+  }
+}
+
+/*MAIN SETUP AND LOOP*/
 void setup()
 {
   Serial.begin(115200);
   Serial.println("Kaboom Konveyor V0.2");
   stepperInitialize();
   scaleInitialize();
+  tftInitialize();
   displayMenu();
 }
 
 void loop()
 {
-  buttonChecks();
-  drawMainMenuButtons();
-  if (Serial.available())
+  if (!finish)
   {
-    // Read command
-    inString = Serial.read();
-    Serial.print("recieved: ");
-    Serial.println(inString);
-
-    // Execute command
-    if (inString == '1')
-    {
-      conveyKaboom();
-    }
-    else if (inString == '2')
-    {
-      tareScale();
-    }
-    else if (inString == '3')
-    {
-      calibrateScale();
-    }
-    else if (inString == '4')
-    {
-      readScale();
-    }
-    else if (inString == '5')
-    {
-      delay(500);
-    }
-    else if (inString == 'x')
-    {
-      // Do nothing, just exit
-      Serial.println(F("Exited System Config, press any key to go back into System Config"));
-    }
+    finish = !finish;
+    tft.fillScreen(BLACK);
   }
+  mainMenuButtonChecks();
+  // if (Serial.available())
+  // {
+  //   // Read command
+  //   inString = Serial.read();
+  //   Serial.print("recieved: ");
+  //   Serial.println(inString);
+  //   // Execute command
+  //   if (inString == '1')
+  //   {
+  //     conveyKaboom();
+  //   }
+  //   else if (inString == '2')
+  //   {
+  //     tareScale();
+  //   }
+  //   else if (inString == '3')
+  //   {
+  //     calibrateScale();
+  //   }
+  //   else if (inString == '4')
+  //   {
+  //     readScale();
+  //   }
+  //   else if (inString == '5')
+  //   {
+  //     delay(500);
+  //   }
+  //   else if (inString == 'x')
+  //   {
+  //     // Do nothing, just finish
+  //     Serial.println(F("finished System Config, press any key to go back into System Config"));
+  //   }
+  // }
 }
