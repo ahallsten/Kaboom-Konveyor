@@ -25,7 +25,7 @@
 // #define FAULT 42
 // Units of Scale
 #define UNITS_G 0
-#define UNITS_GN 1
+#define UNITS_GN 1J
 
 // Screen Analog Values
 #define MINPRESSURE 200
@@ -61,7 +61,8 @@ float raw_reading;
 float scale_reading;
 float cal_factor;
 long tare_point;
-float cal_weight = 50.43; // 50g cal weight
+float cal_weight_g = 50.43; // 50.43g cal weight
+float cal_weight_g_gns = 778.25383 // 50.43g cal weight @15.4324gns/g
 // STEPPER variables
 int motor_interface_type = 1; // Type 1 is a Driver with 2 pins, STEP and DIR
 long accel = 1200;
@@ -369,9 +370,9 @@ void calibrate_scale(void)
   Serial.print(scale.get_units(setting_average_amount), 4); // Show 4 decimals during calibration
   if (setting_units == UNITS_G)
     Serial.print(F("lbs"));
-  if (setting_units == UNITS_GN)
-    Serial.print(F("kg"));
-  Serial.println();
+  // if (setting_units == UNITS_GN)
+  //   Serial.print(F("kg"));
+  // Serial.println();
 
   Serial.print(F("Calibration Factor: "));
   Serial.print(setting_calibration_factor);
@@ -419,9 +420,9 @@ void calibrate_scale(void)
   Serial.print(F(" "));
   if (setting_units == UNITS_G)
     Serial.print(F("lbs"));
-  if (setting_units == UNITS_GN)
-    Serial.print(F("kg"));
-  Serial.println();
+  // if (setting_units == UNITS_GN)
+  //   Serial.print(F("kg"));
+  // Serial.println();
 }
 
 void stepperInitialize()
@@ -573,7 +574,7 @@ void readScale()
   tft.setTextSize(3);
   tft.setCursor(x3, y3);
   tft.print(buf);
-  cal_factor = (scale_reading - raw_reading) / cal_weight;
+  cal_factor = (scale_reading - raw_reading) / cal_weight_g_gns;
   scale.set_scale(cal_factor);
   delay(500);
 

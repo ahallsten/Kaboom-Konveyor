@@ -12,21 +12,21 @@
             "type": "platformio-debug",
             "request": "launch",
             "name": "PIO Debug",
-            "executable": "c:/Users/ahallsten/OneDrive - Plenty/Documents/PlatformIO/Projects/Kaboom-Konveyor/.pio/build/uno/firmware.elf",
-            "projectEnvName": "uno",
+            "executable": "c:/Users/ahallsten/OneDrive - Plenty/Documents/PlatformIO/Projects/Kaboom-Konveyor/.pio/build/megaatmega2560/firmware.elf",
+            "projectEnvName": "megaatmega2560",
             "toolchainBinDir": "C:/Users/ahallsten/.platformio/packages/toolchain-atmelavr/bin",
             "internalConsoleOptions": "openOnSessionStart",
             "preLaunchTask": {
                 "type": "PlatformIO",
-                "task": "Pre-Debug (uno)"
+                "task": "Pre-Debug (megaatmega2560)"
             }
         },
         {
             "type": "platformio-debug",
             "request": "launch",
             "name": "PIO Debug (skip Pre-Debug)",
-            "executable": "c:/Users/ahallsten/OneDrive - Plenty/Documents/PlatformIO/Projects/Kaboom-Konveyor/.pio/build/uno/firmware.elf",
-            "projectEnvName": "uno",
+            "executable": "c:/Users/ahallsten/OneDrive - Plenty/Documents/PlatformIO/Projects/Kaboom-Konveyor/.pio/build/megaatmega2560/firmware.elf",
+            "projectEnvName": "megaatmega2560",
             "toolchainBinDir": "C:/Users/ahallsten/.platformio/packages/toolchain-atmelavr/bin",
             "internalConsoleOptions": "openOnSessionStart"
         },
@@ -34,8 +34,8 @@
             "type": "platformio-debug",
             "request": "launch",
             "name": "PIO Debug (without uploading)",
-            "executable": "c:/Users/ahallsten/OneDrive - Plenty/Documents/PlatformIO/Projects/Kaboom-Konveyor/.pio/build/uno/firmware.elf",
-            "projectEnvName": "uno",
+            "executable": "c:/Users/ahallsten/OneDrive - Plenty/Documents/PlatformIO/Projects/Kaboom-Konveyor/.pio/build/megaatmega2560/firmware.elf",
+            "projectEnvName": "megaatmega2560",
             "toolchainBinDir": "C:/Users/ahallsten/.platformio/packages/toolchain-atmelavr/bin",
             "internalConsoleOptions": "openOnSessionStart",
             "loadMode": "manual"
