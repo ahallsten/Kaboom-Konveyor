@@ -2,6 +2,7 @@
 #include "HX711.h"
 #include <SPI.h>
 #include <Wire.h>
+#include <EEPROM.h>
 /*Libraries for Stepper Driver*/
 #include <AccelStepper.h>
 #include <Servo.h>
@@ -31,12 +32,13 @@
 #define MINPRESSURE 200
 #define MAXPRESSURE 1000
 // Screen Colors
+// Color definitions
 #define BLACK 0x0000
 #define BLUE 0x001F
 #define RED 0xF800
 #define GREEN 0x07E0
-#define RED 0x07FF
-#define GREEN 0xF81F
+#define CYAN 0x07FF
+#define MAGENTA 0xF81F
 #define YELLOW 0xFFE0
 #define WHITE 0xFFFF
 
@@ -61,24 +63,29 @@ float raw_reading;
 float scale_reading;
 float cal_factor;
 long tare_point;
-float cal_weight_g = 50.43; // 50.43g cal weight
-float cal_weight_g_gns = 778.25383 // 50.43g cal weight @15.4324gns/g
+float cal_weight_g = 50.43;         // 50.43g cal weight
+float cal_weight_g_gns = 778.25383; // 50.43g cal weight @15.4324gns/g
+int address_cal_factor = 0;
+int address_tare_point = 4;
 // STEPPER variables
 int motor_interface_type = 1; // Type 1 is a Driver with 2 pins, STEP and DIR
 long accel = 1200;
 long max_speed = 1200;
-long speed = 1000;
+long speed = 1500;
+int inc = 50;
 int pos = 0;
 float mode_state = 1;
 int mode_high_speed = 1000; // default for full step mode
 byte tol = 5;
 float minAccel = 0;
 float maxAccel = 80000;
-float minSpeed = 700;
+float minSpeed = 100;
 float maxspeed = 5000;
 float minPos = 0;
 float maxPos = 5000;
 long step = 0;
+int address_step_accel = 8;
+int address_step_speed = 12;
 // TFT variables
 const int XP = 7, XM = A1, YP = A2, YM = 6; // 320x480 ID=0x6814
 const int TS_LEFT = 176, TS_RT = 921, TS_TOP = 177, TS_BOT = 939;
@@ -97,6 +104,16 @@ uint16_t x5 = 60; // location for inputs
 uint16_t y5 = 180;
 uint16_t x6 = 60; // location for inputs
 uint16_t y6 = 210;
+
+int xs0 = 0;
+int ys0 = 30;
+int xs1 = 170;
+int ys1 = 60;
+int xs2 = 170;
+int ys2 = 90;
+int xs3 = 170;
+int ys3 = 120;
+
 char buf[11];         // buffer for number inputs
 char buf2[11];        // buffer for number inputs
 int pixel_x, pixel_y; // Touch_getXY() updates global vars
@@ -115,7 +132,7 @@ MCUFRIEND_kbv tft;
 // Initialize an object for the screen called "ts" for touch
 TouchScreen ts = TouchScreen(XP, YP, XM, YM, 300);
 // Initialize button objects for UI
-Adafruit_GFX_Button one_btn, two_btn, three_btn, four_btn, five_btn, six_btn, seven_btn, eight_btn, nine_btn, zero_btn, back_btn, fwd_btn, up_btn, down_btn, conveyKaboom_btn, other_btn, scaleRead_btn, testMode_btn, home_btn, tare_ready_btn, calibrate_btn;
+Adafruit_GFX_Button one_btn, two_btn, three_btn, four_btn, five_btn, six_btn, seven_btn, eight_btn, nine_btn, zero_btn, back_btn, rev_btn, fwd_btn, up_btn, down_btn, conveyKaboom_btn, other_btn, scaleRead_btn, testMode_btn, home_btn, tare_ready_btn, calibrate_btn, type_btn;
 
 /*HOME BREW FUNCTIONS*/
 bool Touch_getXY(void)
@@ -136,6 +153,7 @@ bool Touch_getXY(void)
 
 void buttonInitialization() // create buttons with location, color, text, and text size
 {
+  // Number input buttons
   one_btn.initButton(&tft, 60, 120, 80, 80, YELLOW, GREEN, RED, "1", 3);
   two_btn.initButton(&tft, 160, 120, 80, 80, YELLOW, GREEN, RED, "2", 3);
   three_btn.initButton(&tft, 260, 120, 80, 80, YELLOW, GREEN, RED, "3", 3);
@@ -147,16 +165,20 @@ void buttonInitialization() // create buttons with location, color, text, and te
   nine_btn.initButton(&tft, 260, 320, 80, 80, YELLOW, GREEN, RED, "9", 3);
   zero_btn.initButton(&tft, 160, 420, 80, 80, YELLOW, GREEN, RED, "0", 3);
 
-  conveyKaboom_btn.initButton(&tft, 160, 120, 280, 80, YELLOW, GREEN, RED, "Convey \n Kaboom", 2);
-  other_btn.initButton(&tft, 160, 220, 280, 80, YELLOW, GREEN, RED, "Other", 3);
-  scaleRead_btn.initButton(&tft, 160, 320, 280, 80, YELLOW, GREEN, RED, "Scale Raw Read", 3);
-  testMode_btn.initButton(&tft, 160, 420, 280, 80, YELLOW, GREEN, RED, "Test Mode", 3);
+  // Main Menu Buttons
+  conveyKaboom_btn.initButton(&tft, 160, 120, 280, 80, BLUE, GREEN, RED, "Convey \n Kaboom", 2);
+  other_btn.initButton(&tft, 160, 220, 280, 80, BLUE, GREEN, RED, "Other", 3);
+  scaleRead_btn.initButton(&tft, 160, 320, 280, 80, BLUE, GREEN, RED, "Scale Raw Read", 3);
+  testMode_btn.initButton(&tft, 160, 420, 280, 80, BLUE, GREEN, RED, "Test Mode", 3);
 
-  back_btn.initButton(&tft, 60, 420, 80, 80, YELLOW, GREEN, RED, "<-", 3); // work on positions
-  fwd_btn.initButton(&tft, 260, 420, 80, 80, YELLOW, GREEN, RED, "->", 3); 
+  // Manual Stepper Control Buttons
+  rev_btn.initButton(&tft, 60, 420, 80, 80, YELLOW, GREEN, RED, "<-", 3); // work on positions
+  fwd_btn.initButton(&tft, 260, 420, 80, 80, YELLOW, GREEN, RED, "->", 3);
   up_btn.initButton(&tft, 60, 420, 80, 80, YELLOW, GREEN, RED, "up", 3);
   down_btn.initButton(&tft, 260, 420, 80, 80, YELLOW, GREEN, RED, "dwn", 3);
+  type_btn.initButton(&tft, 260, 420, 80, 80, YELLOW, GREEN, RED, "dwn", 3);
 
+  // Read Scale Buttons
   tare_ready_btn.initButton(&tft, 160, 320, 280, 80, YELLOW, GREEN, RED, "Tare", 3);
   home_btn.initButton(&tft, 160, 420, 280, 80, YELLOW, GREEN, RED, "Home", 3);
   calibrate_btn.initButton(&tft, 160, 220, 280, 80, YELLOW, GREEN, RED, "Calibrate", 3);
@@ -170,10 +192,47 @@ void tftInitialize()
   tft.fillScreen(BLACK);
   tft.setTextColor(WHITE, BLACK);
   tft.setTextSize(2);
-  tft.setCursor(0, y0);
+  tft.setCursor(0, 0);
   sprintf(buf, "%-10s", "Kaboom Konveyor V0.3");
   tft.print(buf);
   buttonInitialization();
+}
+
+void scaleInitialize()
+{
+  Serial.println("Initializing Scale on pins:");
+  Serial.print("SDA: ");
+  Serial.println(LOADCELL_DOUT_PIN);
+  Serial.print("CLK: ");
+  Serial.println(LOADCELL_SCK_PIN);
+
+  cal_factor = EEPROM.get(address_cal_factor, cal_factor);
+  tare_point = EEPROM.get(address_tare_point, tare_point);
+  scale.set_offset(tare_point);
+  scale.set_scale(cal_factor);
+
+  scale.begin(LOADCELL_DOUT_PIN, LOADCELL_SCK_PIN);
+  // while (amplitude >= threshold) // test and keep testing until scale is settled and ready for tare.
+  // {
+  //   int old_scale_reading = 0;
+  //   int new_scale_reading = scale.read();
+  //   int amplitude = new_scale_reading - old_scale_reading;
+
+  //   scale_init_count++;
+  //   if (scale_init_count >= scale_init_count_threshold)
+  //   {
+  //     Serial.print("scale not settling count:");
+  //     Serial.println(scale_init_count);
+  //     break;
+  //   }
+  // }
+}
+
+void stepperInitialize()
+{
+  stepper.setMaxSpeed(max_speed);
+  stepper.setSpeed(speed);
+  stepper.setAcceleration(accel);
 }
 
 void drawMainMenuButtons()
@@ -205,6 +264,16 @@ void drawScaleReadButtons()
   home_btn.drawButton();
   tare_ready_btn.drawButton();
   calibrate_btn.drawButton();
+}
+
+void drawTestModeButtons()
+{
+  up_btn.drawButton();
+  down_btn.drawButton();
+  rev_btn.drawButton();
+  fwd_btn.drawButton();
+  type_btn.drawButton();
+  home_btn.drawButton();
 }
 
 byte read_line(char *buffer, byte buffer_length) // a way to read incoming data from serial port
@@ -265,171 +334,6 @@ void displayMenu() // call to tell user how to navigate the UI
   // Serial.println(F("4) Read Scale Continuously"));
   // Serial.println(F("5) Reserved"));
   // Serial.println(F("x) finish"));
-}
-
-void scaleInitialize()
-{
-  Serial.println("Initializing Scale on pins:");
-  Serial.print("SDA: ");
-  Serial.println(LOADCELL_DOUT_PIN);
-  Serial.print("CLK: ");
-  Serial.println(LOADCELL_SCK_PIN);
-
-  // if (scale.wait_ready_retry(init_retries, delay_ms))
-  // {
-  //   long reading = scale.read();
-  //   Serial.print("HX711 initial reading: ");
-  //   Serial.println(reading);
-  // }
-  // else
-  // {
-  //   Serial.println("HX711 not found.");
-  // }
-
-  scale.begin(LOADCELL_DOUT_PIN, LOADCELL_SCK_PIN);
-  // while (amplitude >= threshold) // test and keep testing until scale is settled and ready for tare.
-  // {
-  //   int old_scale_reading = 0;
-  //   int new_scale_reading = scale.read();
-  //   int amplitude = new_scale_reading - old_scale_reading;
-
-  //   scale_init_count++;
-  //   if (scale_init_count >= scale_init_count_threshold)
-  //   {
-  //     Serial.print("scale not settling count:");
-  //     Serial.println(scale_init_count);
-  //     break;
-  //   }
-  // }
-}
-
-void tareScale()
-{
-  Serial.print(F("\n\rGetting Tare point: "));
-  scale.tare();                                // Reset the scale to 0
-  setting_tare_point = scale.read_average(10); // Get 10 readings from the HX711 and average them
-  Serial.println(setting_tare_point);
-
-  Serial.println("tareing scale...");
-  if (scale.wait_ready_retry(10))
-  {
-    scale.tare(); // reset the scale to 0
-
-    Serial.print("raw reading: \t\t");
-    Serial.println(scale.read()); // print a raw reading from the ADC
-
-    Serial.print("Average Reading: \t\t");
-    Serial.println(scale.read_average(read_avg)); // print the average of 20 readings from the ADC
-
-    Serial.print("get value: \t\t");
-    Serial.println(scale.get_value(5)); // print the average of 5 readings from the ADC minus the tare weight, set with tare()
-
-    Serial.print("get units: \t\t");
-    Serial.println(scale.get_units(5), 1); // print the average of 5 readings from the ADC minus tare weight, divided
-    Serial.println("done tareing");
-    displayMenu();
-  }
-  else
-  {
-    Serial.println("HX711 not found.");
-  }
-}
-
-void calibrateScale()
-{
-  Serial.println("Put the 50g weight on the scale and enter serial");
-  Serial.println("calibrating...");
-  while (!Serial.available())
-  {
-    scale.set_scale(50.f);
-  }
-  Serial.println("done calibrating, offset: ");
-  Serial.println(scale.get_offset());
-  Serial.println("units:");
-  Serial.println(scale.get_units());
-}
-
-void calibrate_scale(void)
-{
-  Serial.println();
-  Serial.println();
-  Serial.println(F("Scale calibration"));
-  Serial.println(F("Place known weight on scale. Press a key when weight is in place and stable."));
-
-  while (Serial.available() == false)
-    ; // Wait for user to press key
-
-  Serial.print(F("Tare: "));
-  Serial.println(setting_tare_point);
-
-  long rawReading = scale.read_average(setting_average_amount); // Take average reading over a given number of times
-  Serial.print(F("Raw: "));
-  Serial.println(rawReading);
-
-  Serial.print(F("Current Reading: "));
-  Serial.print(scale.get_units(setting_average_amount), 4); // Show 4 decimals during calibration
-  if (setting_units == UNITS_G)
-    Serial.print(F("lbs"));
-  // if (setting_units == UNITS_GN)
-  //   Serial.print(F("kg"));
-  // Serial.println();
-
-  Serial.print(F("Calibration Factor: "));
-  Serial.print(setting_calibration_factor);
-  Serial.println();
-
-  while (Serial.available())
-    Serial.read(); // Clear anything in RX buffer
-
-  Serial.print(F("Please enter the weight currently sitting on the scale: "));
-
-  // Read user input
-  char newSetting[15]; // Max 15 characters: "12.5765" = 8 characters (includes trailing /0)
-  read_line(newSetting, sizeof(newSetting));
-
-  float weightOnScale = atof(newSetting); // Convert this string to a float
-  Serial.println();
-
-  Serial.print(F("User entered: "));
-  Serial.println(weightOnScale, 4);
-
-  // Convert this weight to a calibration factor
-
-  // tare: 210193
-  // raw: 246177
-  // User Input: 0.5276 kg
-  // avg: 4 times
-
-  // get_units = (raw-OFFSET) / calibration_factor
-  // 0.5276 = (246177-210193) / cal_factor
-  // 114185 / .45 = 256744
-
-  setting_calibration_factor = (rawReading - setting_tare_point) / weightOnScale;
-
-  Serial.print(F("New Calibration Factor: "));
-  Serial.print(setting_calibration_factor);
-  Serial.println();
-
-  scale.set_scale(setting_calibration_factor); // Go to this new cal factor
-
-  // Record this new value to EEPROM
-  // record_system_settings();
-
-  Serial.print(F("New Scale Reading: "));
-  Serial.print(scale.get_units(setting_average_amount), 4); // Show 4 decimals during calibration
-  Serial.print(F(" "));
-  if (setting_units == UNITS_G)
-    Serial.print(F("lbs"));
-  // if (setting_units == UNITS_GN)
-  //   Serial.print(F("kg"));
-  // Serial.println();
-}
-
-void stepperInitialize()
-{
-  stepper.setMaxSpeed(max_speed);
-  stepper.setSpeed(speed);
-  stepper.setAcceleration(accel);
 }
 
 void conveyKaboom()
@@ -534,6 +438,7 @@ void readScale()
   scale.tare();
   scale.set_scale();
   tare_point = scale.get_offset();
+  EEPROM.put(address_tare_point, tare_point); // store the value in the EEPROM
   delay(500);
 
   sprintf(buf2, "%14d", tare_point); // print the offset to get a zero scale reading
@@ -576,6 +481,7 @@ void readScale()
   tft.print(buf);
   cal_factor = (scale_reading - raw_reading) / cal_weight_g_gns;
   scale.set_scale(cal_factor);
+  EEPROM.put(address_cal_factor, cal_factor); // store the value in the EEPROM
   delay(500);
 
   sprintf(buf, "%14d", scale.get_scale()); // print the cal factor reading
@@ -616,15 +522,24 @@ bool testModeButtonChecks()
 {
   bool down = Touch_getXY(); // need to find out if I need this
   home_btn.press(down && home_btn.contains(pixel_x, pixel_y));
+  up_btn.press(down && up_btn.contains(pixel_x, pixel_y));
+  type_btn.press(down && type_btn.contains(pixel_x, pixel_y));
+  rev_btn.press(down && rev_btn.contains(pixel_x, pixel_y));
   fwd_btn.press(down && fwd_btn.contains(pixel_x, pixel_y));
-  back_btn.press(down && back_btn.contains(pixel_x, pixel_y));
+  down_btn.press(down && down_btn.contains(pixel_x, pixel_y));
 
-  if (home_btn.justReleased())
+  if (home_btn.justReleased()) // HOME
     home_btn.drawButton();
-  if (tare_ready_btn.justReleased())
-    tare_ready_btn.drawButton();
-  if (calibrate_btn.justReleased())
-    calibrate_btn.drawButton();
+  if (up_btn.justReleased()) // UP
+    up_btn.drawButton();
+  if (down_btn.justReleased()) // DOWN
+    down_btn.drawButton();
+  if (rev_btn.justReleased()) // REVERSE
+    rev_btn.drawButton();
+  if (fwd_btn.justReleased()) // FORWARD
+    fwd_btn.drawButton();
+  if (type_btn.justReleased()) // TYPE
+    type_btn.drawButton();
 
   if (home_btn.justPressed())
   {
@@ -636,9 +551,9 @@ bool testModeButtonChecks()
     tft.print(buf);
     home = !home;
   }
-  if (tare_ready_btn.justPressed())
+  if (up_btn.justPressed())
   {
-    tare_ready_btn.drawButton(true);
+    up_btn.drawButton(true);
     tft.setTextColor(WHITE, BLACK);
     tft.setTextSize(3);
     sprintf(buf, "%10s", "tareing scale");
@@ -646,12 +561,42 @@ bool testModeButtonChecks()
     tft.print(buf);
     finish = !finish;
   }
-  if (calibrate_btn.justPressed())
+  if (down_btn.justPressed())
   {
-    calibrate_btn.drawButton(true);
+    down_btn.drawButton(true);
     tft.setTextColor(WHITE, BLACK);
     tft.setTextSize(3);
     sprintf(buf, "%10s", "Calibrating   ");
+    tft.setCursor(x1, y1);
+    tft.print(buf);
+    finish = !finish;
+  }
+  if (rev_btn.justPressed())
+  {
+    rev_btn.drawButton(true);
+    tft.setTextColor(WHITE, BLACK);
+    tft.setTextSize(3);
+    sprintf(buf, "%10s", "going home");
+    tft.setCursor(x0, y0);
+    tft.print(buf);
+    home = !home;
+  }
+  if (fwd_btn.justPressed())
+  {
+    fwd_btn.drawButton(true);
+    tft.setTextColor(WHITE, BLACK);
+    tft.setTextSize(3);
+    sprintf(buf, "%10s", "tareing scale");
+    tft.setCursor(x1, y1);
+    tft.print(buf);
+    finish = !finish;
+  }
+  if (type_btn.justPressed())
+  {
+    type_btn.drawButton(true);
+    tft.setTextColor(WHITE, BLACK);
+    tft.setTextSize(3);
+    sprintf(buf, "%10s", "tareing scale");
     tft.setCursor(x1, y1);
     tft.print(buf);
     finish = !finish;
@@ -661,6 +606,44 @@ bool testModeButtonChecks()
 
 void testMode()
 {
+  tft.fillScreen(BLACK);
+  sprintf(buf, "%14s", "Manual stepper op");
+  tft.setTextColor(WHITE, BLACK);
+  tft.setTextSize(3);
+  tft.setCursor(xs0, ys0);
+  tft.print(buf);
+
+  sprintf(buf, "%14s", "Accumulated: ");
+  tft.setTextColor(WHITE, BLACK);
+  tft.setTextSize(3);
+  tft.setCursor(xs1, ys1);
+  tft.print(buf);
+
+  sprintf(buf, "%14s", "inc: ");
+  tft.setTextColor(WHITE, BLACK);
+  tft.setTextSize(3);
+  tft.setCursor(xs2, ys2);
+  tft.print(buf);
+
+  sprintf(buf, "%14s", "speed: ");
+  tft.setTextColor(WHITE, BLACK);
+  tft.setTextSize(3);
+  tft.setCursor(xs3, ys3);
+  tft.print(buf);
+
+  sprintf(buf, "%14s", "accel: ");
+  tft.setTextColor(WHITE, BLACK);
+  tft.setTextSize(3);
+  tft.setCursor(xs3, ys3);
+  tft.print(buf);
+  drawTestModeButtons();
+
+  while (finish)
+  {
+    stepper.setAcceleration(accel);
+    stepper.setSpeed(speed);
+    finish = testModeButtonChecks();
+  }
 }
 
 void mainMenuButtonChecks() // Check buttons if any has been pressed
@@ -701,7 +684,6 @@ void mainMenuButtonChecks() // Check buttons if any has been pressed
     sprintf(buf, "%10s", "Calibrate");
     tft.setCursor(x0, y0);
     tft.print(buf);
-    calibrateScale();
   }
   if (scaleRead_btn.justPressed())
   {
